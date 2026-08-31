@@ -16,17 +16,17 @@ from werkzeug.utils import secure_filename
 import tempfile
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend
+CORS(app)  
 
-# Configuration
+
 UPLOAD_FOLDER = tempfile.gettempdir()
 ALLOWED_EXTENSIONS = {'mp3', 'wav', 'ogg', 'opus', 'flac', 'm4a'}
-MAX_FILE_SIZE = 25 * 1024 * 1024  # 25MB
+MAX_FILE_SIZE = 25 * 1024 * 1024  
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 
-# Language configuration
+
 LANGUAGES = {
     "tamil": {"code": "ta", "label": "Tamil"},
     "english": {"code": "en", "label": "English"},
@@ -42,9 +42,7 @@ TRANSLATION_MODELS = {
     ("hindi", "english"): "Helsinki-NLP/Opus-MT-hi-en",
 }
 
-# ============================================
-# HELPER FUNCTIONS
-# ============================================
+
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -53,12 +51,12 @@ def preprocess_audio(audio_input, sr_rate):
     """Clean audio for better recognition"""
     processed = np.array(audio_input, dtype=np.float32)
     
-    # Normalize
+    
     max_val = np.max(np.abs(processed))
     if max_val > 0:
         processed = processed / max_val * 0.9
     
-    # Amplify if quiet
+    
     rms = np.sqrt(np.mean(processed ** 2))
     if rms < 0.05:
         processed = processed * 2.0
@@ -111,7 +109,7 @@ def text_to_speech(text, language_code, slow=False):
     try:
         tts = gTTS(text=text, lang=language_code, slow=slow)
         
-        # Save to bytes buffer instead of file
+        
         audio_buffer = io.BytesIO()
         tts.write_to_fp(audio_buffer)
         audio_buffer.seek(0)
@@ -120,9 +118,7 @@ def text_to_speech(text, language_code, slow=False):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# ============================================
-# API ENDPOINTS
-# ============================================
+
 
 @app.route('/api/health', methods=['GET'])
 def health():
@@ -150,7 +146,7 @@ def translate():
     """
     
     try:
-        # Validate request
+        
         if 'audio_file' not in request.files:
             return jsonify({"success": False, "error": "No audio file provided"}), 400
         
@@ -162,38 +158,38 @@ def translate():
         target_lang = request.form['target_lang'].lower()
         slow_output = request.form.get('slow_output', 'false').lower() == 'true'
         
-        # Validate file
+        
         if file.filename == '':
             return jsonify({"success": False, "error": "No file selected"}), 400
         
         if not allowed_file(file.filename):
             return jsonify({"success": False, "error": "Invalid file format"}), 400
         
-        # Validate languages
+        
         if source_lang not in LANGUAGES or target_lang not in LANGUAGES:
             return jsonify({"success": False, "error": "Invalid language"}), 400
         
-        # Save file temporarily
+        
         filename = secure_filename(file.filename)
         temp_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(temp_path)
         
         try:
-            # Step 1: Speech to Text
+            
             result = audio_to_text(temp_path, language=source_lang)
             if not result['success']:
                 return jsonify(result), 400
             
             original_text = result['text']
             
-            # Step 2: Translation
+            
             result = translate_text(original_text, source_lang, target_lang)
             if not result['success']:
                 return jsonify(result), 400
             
             translated_text = result['text']
             
-            # Step 3: Text to Speech
+            
             result = text_to_speech(
                 translated_text, 
                 LANGUAGES[target_lang]['code'],
@@ -204,7 +200,7 @@ def translate():
             
             audio_buffer = result['audio']
             
-            # Return results
+            
             return jsonify({
                 "success": True,
                 "original_text": original_text,
@@ -215,7 +211,7 @@ def translate():
             })
         
         finally:
-            # Clean up temp file
+            
             if os.path.exists(temp_path):
                 os.remove(temp_path)
     
@@ -247,25 +243,25 @@ def translate_with_audio():
         if source_lang not in LANGUAGES or target_lang not in LANGUAGES:
             return jsonify({"success": False, "error": "Invalid language"}), 400
         
-        # Save temporarily
+        
         filename = secure_filename(file.filename)
         temp_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(temp_path)
         
         try:
-            # Step 1: Speech to Text
+            
             result = audio_to_text(temp_path, language=source_lang)
             if not result['success']:
                 return jsonify(result), 400
             original_text = result['text']
             
-            # Step 2: Translate
+            
             result = translate_text(original_text, source_lang, target_lang)
             if not result['success']:
                 return jsonify(result), 400
             translated_text = result['text']
             
-            # Step 3: Text to Speech
+            
             result = text_to_speech(
                 translated_text,
                 LANGUAGES[target_lang]['code'],
@@ -276,7 +272,7 @@ def translate_with_audio():
             
             audio_buffer = result['audio']
             
-            # Return audio file with metadata
+            
             return send_file(
                 audio_buffer,
                 mimetype='audio/mpeg',
@@ -295,9 +291,7 @@ def translate_with_audio():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# ============================================
-# ERROR HANDLERS
-# ============================================
+
 
 @app.errorhandler(413)
 def file_too_large(e):
@@ -311,9 +305,6 @@ def not_found(e):
 def server_error(e):
     return jsonify({"success": False, "error": "Server error"}), 500
 
-# ============================================
-# RUN
-# ============================================
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
